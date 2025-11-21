@@ -15,6 +15,11 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+env_Path=".env"
+config_path="config.json"
+secrets_path="secrets"
+database_path="config.db"
+decision_logs_path="decision_logs"
 
 # ------------------------------------------------------------------------
 # Utility Functions: Colored Output
@@ -33,6 +38,26 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+read_env_vars() {
+    if [ -f $env_Path ]; then
+        # 读取端口配置，设置默认值
+        NOFX_FRONTEND_PORT=$(grep "^NOFX_FRONTEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "3000")
+        NOFX_BACKEND_PORT=$(grep "^NOFX_BACKEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        
+        # 去除可能的引号和空格
+        NOFX_FRONTEND_PORT=$(echo "$NOFX_FRONTEND_PORT" | tr -d '"'"'" | tr -d ' ')
+        NOFX_BACKEND_PORT=$(echo "$NOFX_BACKEND_PORT" | tr -d '"'"'" | tr -d ' ')
+        
+        # 如果为空则使用默认值
+        NOFX_FRONTEND_PORT=${NOFX_FRONTEND_PORT:-3000}
+        NOFX_BACKEND_PORT=${NOFX_BACKEND_PORT:-8080}
+    else
+        # 如果.env不存在，使用默认端口
+        NOFX_FRONTEND_PORT=3000
+        NOFX_BACKEND_PORT=8080
+    fi
 }
 
 # ------------------------------------------------------------------------
@@ -67,9 +92,9 @@ check_docker() {
 # Validation: Environment File (.env)
 # ------------------------------------------------------------------------
 check_env() {
-    if [ ! -f ".env" ]; then
+    if [ ! -f "$env_Path" ]; then
         print_warning ".env 不存在，从模板复制..."
-        cp .env.example .env
+        cp $env_Path.example $env_Path
         print_info "✓ 已使用默认环境变量创建 .env"
         print_info "💡 如需修改端口等设置，可编辑 .env 文件"
     fi
@@ -85,19 +110,19 @@ check_encryption() {
     print_info "检查加密环境..."
     
     # 检查RSA密钥对
-    if [ ! -f "secrets/rsa_key" ] || [ ! -f "secrets/rsa_key.pub" ]; then
+    if [ ! -f $secrets_path"/rsa_key" ] || [ ! -f $secrets_path"/rsa_key.pub" ]; then
         print_warning "RSA密钥对不存在"
         need_setup=true
     fi
     
     # 检查数据加密密钥
-    if [ ! -f ".env" ] || ! grep -q "^DATA_ENCRYPTION_KEY=" .env; then
+    if [ ! -f $env_Path ] || ! grep -q "^DATA_ENCRYPTION_KEY=" $env_Path; then
         print_warning "数据加密密钥未配置"
         need_setup=true
     fi
     
     # 检查JWT认证密钥
-    if [ ! -f ".env" ] || ! grep -q "^JWT_SECRET=" .env; then
+    if [ ! -f $env_Path ] || ! grep -q "^JWT_SECRET=" $env_Path; then
         print_warning "JWT认证密钥未配置"
         need_setup=true
     fi
@@ -109,12 +134,12 @@ check_encryption() {
         echo ""
 
         # 检查加密设置脚本是否存在
-        if [ -f "scripts/setup_encryption.sh" ]; then
+        if [ -f $scripts_path"/setup_encryption.sh" ]; then
             print_info "加密系统将保护: API密钥、私钥、Hyperliquid代理钱包"
             echo ""
 
             # 自动运行加密设置脚本
-            echo -e "Y\nn\nn" | bash scripts/setup_encryption.sh
+            echo -e "Y\nn\nn" | bash $scripts_path"/setup_encryption.sh"
             if [ $? -eq 0 ]; then
                 echo ""
                 print_success "🔐 加密环境设置完成！"
@@ -128,32 +153,32 @@ check_encryption() {
                 exit 1
             fi
         else
-            print_error "加密设置脚本不存在: scripts/setup_encryption.sh"
-            print_info "请手动运行: ./scripts/setup_encryption.sh"
+            print_error "加密设置脚本不存在: $scripts_path/setup_encryption.sh"
+            print_info "请手动运行: $scripts_path/setup_encryption.sh"
             exit 1
         fi
     else
         print_success "🔐 加密环境已配置"
-        print_info "  • RSA密钥对: secrets/rsa_key + secrets/rsa_key.pub"
-        print_info "  • 数据加密密钥: .env (DATA_ENCRYPTION_KEY)"
-        print_info "  • JWT认证密钥: .env (JWT_SECRET)"
+        print_info "  • RSA密钥对: $secrets_path/rsa_key + $secrets_path/rsa_key.pub"
+        print_info "  • 数据加密密钥: $env_Path (DATA_ENCRYPTION_KEY)"
+        print_info "  • JWT认证密钥: $env_Path (JWT_SECRET)"
         print_info "  • 加密算法: RSA-OAEP-2048 + AES-256-GCM + HS256"
         print_info "  • 保护数据: API密钥、私钥、Hyperliquid代理钱包、用户认证"
         
         # 验证密钥文件权限
-        if [ -f "secrets/rsa_key" ]; then
-            local perm=$(stat -f "%A" "secrets/rsa_key" 2>/dev/null || stat -c "%a" "secrets/rsa_key" 2>/dev/null)
+        if [ -f $secrets_path"/rsa_key" ]; then
+            local perm=$(stat -f "%A" $secrets_path"/rsa_key" 2>/dev/null || stat -c "%a" $secrets_path"/rsa_key" 2>/dev/null)
             if [ "$perm" != "600" ]; then
                 print_warning "修复RSA私钥权限..."
-                chmod 600 secrets/rsa_key
+                chmod 600 $secrets_path"/rsa_key"
             fi
         fi
         
-        if [ -f ".env" ]; then
-            local perm=$(stat -f "%A" ".env" 2>/dev/null || stat -c "%a" ".env" 2>/dev/null)
+        if [ -f $env_Path ]; then
+            local perm=$(stat -f "%A" $env_Path 2>/dev/null || stat -c "%a" $env_Path 2>/dev/null)
             if [ "$perm" != "600" ]; then
                 print_warning "修复环境文件权限..."
-                chmod 600 .env
+                chmod 600 $env_Path
             fi
         fi
     fi
@@ -163,9 +188,9 @@ check_encryption() {
 # Validation: Configuration File (config.json) - BASIC SETTINGS ONLY
 # ------------------------------------------------------------------------
 check_config() {
-    if [ ! -f "config.json" ]; then
+    if [ ! -f "$config_path" ]; then
         print_warning "config.json 不存在，从模板复制..."
-        cp config.json.example config.json
+        cp $config_path.example $config_path
         print_info "✓ 已使用默认配置创建 config.json"
         print_info "💡 如需修改基础设置（杠杆大小、开仓币种、管理员模式、JWT密钥等），可编辑 config.json"
         print_info "💡 模型/交易所/交易员配置请使用Web界面"
@@ -174,79 +199,27 @@ check_config() {
 }
 
 # ------------------------------------------------------------------------
-# Utility: Read Environment Variables
-# ------------------------------------------------------------------------
-read_env_vars() {
-    if [ -f ".env" ]; then
-        # 读取端口配置，设置默认值
-        NOFX_FRONTEND_PORT=$(grep "^NOFX_FRONTEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "3000")
-        NOFX_BACKEND_PORT=$(grep "^NOFX_BACKEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "8080")
-        
-        # 去除可能的引号和空格
-        NOFX_FRONTEND_PORT=$(echo "$NOFX_FRONTEND_PORT" | tr -d '"'"'" | tr -d ' ')
-        NOFX_BACKEND_PORT=$(echo "$NOFX_BACKEND_PORT" | tr -d '"'"'" | tr -d ' ')
-        
-        # 如果为空则使用默认值
-        NOFX_FRONTEND_PORT=${NOFX_FRONTEND_PORT:-3000}
-        NOFX_BACKEND_PORT=${NOFX_BACKEND_PORT:-8080}
-    else
-        # 如果.env不存在，使用默认端口
-        NOFX_FRONTEND_PORT=3000
-        NOFX_BACKEND_PORT=8080
-    fi
-}
-
-# ------------------------------------------------------------------------
 # Validation: Database File (config.db)
 # ------------------------------------------------------------------------
 check_database() {
-    if [ -d "config.db" ]; then
+    if [ -d "$database_path" ]; then
         # 如果存在的是目录，删除它
         print_warning "config.db 是目录而非文件，正在删除目录..."
-        rm -rf config.db
+        rm -rf $database_path
         print_info "✓ 已删除目录，现在创建文件..."
-        install -m 600 /dev/null config.db
+        install -m 600 /dev/null $database_path
         print_success "✓ 已创建空数据库文件（权限: 600），系统将在启动时初始化"
-    elif [ ! -f "config.db" ]; then
+    elif [ ! -f "$database_path" ]; then
         # 如果不存在文件，创建它
         print_warning "数据库文件不存在，创建空数据库文件..."
         # 创建空文件以避免Docker创建目录（使用安全权限600）
-        install -m 600 /dev/null config.db
+        install -m 600 /dev/null $database_path
         print_info "✓ 已创建空数据库文件（权限: 600），系统将在启动时初始化"
     else
         # 文件存在
         print_success "数据库文件存在"
     fi
 }
-
-# ------------------------------------------------------------------------
-# Build: Frontend (Node.js Based)
-# ------------------------------------------------------------------------
-# build_frontend() {
-#     print_info "检查前端构建环境..."
-
-#     if ! command -v node &> /dev/null; then
-#         print_error "Node.js 未安装！请先安装 Node.js"
-#         exit 1
-#     fi
-
-#     if ! command -v npm &> /dev/null; then
-#         print_error "npm 未安装！请先安装 npm"
-#         exit 1
-#     fi
-
-#     print_info "正在构建前端..."
-#     cd web
-
-#     print_info "安装 Node.js 依赖..."
-#     npm install
-
-#     print_info "构建前端应用..."
-#     npm run build
-
-#     cd ..
-#     print_success "前端构建完成"
-# }
 
 # ------------------------------------------------------------------------
 # Service Management: Start
@@ -258,19 +231,14 @@ start() {
     read_env_vars
 
     # 确保必要的文件和目录存在（修复 Docker volume 挂载问题）
-    if [ ! -f "config.db" ]; then
+    if [ ! -f "$database_path" ]; then
         print_info "创建数据库文件..."
         install -m 600 /dev/null config.db
     fi
-    if [ ! -d "decision_logs" ]; then
+    if [ ! -d "$decision_logs_path" ]; then
         print_info "创建日志目录..."
-        install -m 700 -d decision_logs
+        install -m 700 -d $decision_logs_path
     fi
-
-    # Auto-build frontend if missing or forced
-    # if [ ! -d "web/dist" ] || [ "$1" == "--build" ]; then
-    #     build_frontend
-    # fi
 
     # Rebuild images if flag set
     if [ "$1" == "--build" ]; then

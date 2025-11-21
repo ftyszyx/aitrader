@@ -1,10 +1,10 @@
 services:
   # Backend service (API and core logic)
-  nofx:
+  aitrader:
     build:
-      context: .
-      dockerfile: ./docker/Dockerfile.backend
-    container_name: nofx-trading
+      context: ./server
+      dockerfile: ./Dockerfile.backend
+    container_name: aitrader-trading
     restart: unless-stopped
     stop_grace_period: 30s  # 允许应用有 30 秒时间优雅关闭
     ports:
@@ -23,7 +23,7 @@ services:
       - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}  # 数据库加密密钥
       - JWT_SECRET=${JWT_SECRET}  # JWT认证密钥
     networks:
-      - nofx-network
+      - aitrader-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
       interval: 30s
@@ -32,18 +32,18 @@ services:
       start_period: 60s
 
   # Frontend service (static serving and proxy)
-  nofx-frontend:
+  aitrader-frontend:
     build:
-      context: .
-      dockerfile: ./docker/Dockerfile.frontend
-    container_name: nofx-frontend
+      context: ./web
+      dockerfile: ./Dockerfile.frontend
+    container_name: aitrader-frontend
     restart: unless-stopped
     ports:
       - "${NOFX_FRONTEND_PORT:-3000}:80"
     networks:
-      - nofx-network
+      - aitrader-network
     depends_on:
-      - nofx
+      - aitrader
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
@@ -52,5 +52,5 @@ services:
       start_period: 5s
 
 networks:
-  nofx-network:
+  aitrader-network:
     driver: bridge
