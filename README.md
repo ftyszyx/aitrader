@@ -5,6 +5,7 @@ fork from https://github.com/NoFxAiOS/nofx/tree/dev
 
 
 ## run
+./start.sh start
 
 
 ## todos

@@ -20,6 +20,7 @@ config_path="config.json"
 secrets_path="secrets"
 database_path="config.db"
 decision_logs_path="decision_logs"
+scripts_path="./scripts"
 
 # ------------------------------------------------------------------------
 # Utility Functions: Colored Output
