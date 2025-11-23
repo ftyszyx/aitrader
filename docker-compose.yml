@@ -1,6 +1,7 @@
 services:
   # Backend service (API and core logic)
   aitrader:
+    image: ${NOFX_BACKEND_IMAGE:-ftyszyx752/aitrader-backend:latest}
     build:
       context: ./server
       dockerfile: ./Dockerfile.backend
@@ -33,6 +34,7 @@ services:
 
   # Frontend service (static serving and proxy)
   aitrader-frontend:
+    image: ${NOFX_FRONTEND_IMAGE:-ftyszyx752/aitrader-frontend:latest}
     build:
       context: ./web
       dockerfile: ./Dockerfile.frontend
